@@ -327,6 +327,13 @@ static struct kprobe newfstatat_kp = {
 };
 #endif
 
+#ifdef CONFIG_KSU_COMPAT_SYSCALL
+static struct kprobe fstatat64_kp = {
+	.symbol_name = SYS_FSTATAT64_SYMBOL,
+	.pre_handler = sys_newfstatat_handler_pre,
+};
+#endif
+
 #if 1
 static struct kprobe execve_kp = {
 	.symbol_name = SYS_EXECVE_SYMBOL,
@@ -342,6 +349,13 @@ static struct kprobe execve_kp = {
 	.symbol_name = "do_execveat_common",
 #endif
 	.pre_handler = execve_handler_pre,
+};
+#endif
+
+#ifdef CONFIG_KSU_COMPAT_SYSCALL
+static struct kprobe execve_compat_kp = {
+	.symbol_name = SYS_EXECVE_COMPAT_SYMBOL,
+	.pre_handler = sys_execve_handler_pre,
 };
 #endif
 
@@ -372,8 +386,16 @@ void ksu_sucompat_init()
 	int ret;
 	ret = register_kprobe(&execve_kp);
 	pr_info("sucompat: execve_kp: %d\n", ret);
+#ifdef CONFIG_KSU_COMPAT_SYSCALL
+	ret = register_kprobe(&execve_compat_kp);
+	pr_info("sucompat: execve_compat_kp: %d\n", ret);
+#endif
 	ret = register_kprobe(&newfstatat_kp);
 	pr_info("sucompat: newfstatat_kp: %d\n", ret);
+#ifdef CONFIG_KSU_COMPAT_SYSCALL
+	ret = register_kprobe(&fstatat64_kp);
+	pr_info("sucompat: fstatat64_kp: %d\n", ret);
+#endif
 	ret = register_kprobe(&faccessat_kp);
 	pr_info("sucompat: faccessat_kp: %d\n", ret);
 	ret = register_kprobe(&pts_unix98_lookup_kp);
@@ -385,7 +407,13 @@ void ksu_sucompat_exit()
 {
 #ifdef KSU_HOOK_WITH_KPROBES
 	unregister_kprobe(&execve_kp);
+#ifdef CONFIG_KSU_COMPAT_SYSCALL
+	unregister_kprobe(&execve_compat_kp);
+#endif
 	unregister_kprobe(&newfstatat_kp);
+#ifdef CONFIG_KSU_COMPAT_SYSCALL
+	unregister_kprobe(&fstatat64_kp);
+#endif
 	unregister_kprobe(&faccessat_kp);
 	unregister_kprobe(&pts_unix98_lookup_kp);
 #endif
@@ -393,21 +421,30 @@ void ksu_sucompat_exit()
 
 #ifdef CONFIG_KSU_SUSFS_SUS_SU
 extern bool ksu_devpts_hook;
-
 void ksu_susfs_disable_sus_su(void) {
 	enable_kprobe(&execve_kp);
+#ifdef CONFIG_KSU_COMPAT_SYSCALL
+	enable_kprobe(&execve_compat_kp);
+#endif
 	enable_kprobe(&newfstatat_kp);
+#ifdef CONFIG_KSU_COMPAT_SYSCALL
+	enable_kprobe(&fstatat64_kp);
+#endif
 	enable_kprobe(&faccessat_kp);
 	enable_kprobe(&pts_unix98_lookup_kp);
 	ksu_devpts_hook = false;
 }
-
 void ksu_susfs_enable_sus_su(void) {
 	disable_kprobe(&execve_kp);
+#ifdef CONFIG_KSU_COMPAT_SYSCALL
+	disable_kprobe(&execve_compat_kp);
+#endif
 	disable_kprobe(&newfstatat_kp);
+#ifdef CONFIG_KSU_COMPAT_SYSCALL
+	disable_kprobe(&fstatat64_kp);
+#endif
 	disable_kprobe(&faccessat_kp);
 	disable_kprobe(&pts_unix98_lookup_kp);
 	ksu_devpts_hook = true;
 }
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_SU
-

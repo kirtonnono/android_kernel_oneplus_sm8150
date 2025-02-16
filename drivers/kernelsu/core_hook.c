@@ -66,8 +66,9 @@ bool susfs_is_allow_su(void)
 
 extern u32 susfs_zygote_sid;
 extern bool susfs_is_mnt_devname_ksu(struct path *path);
+#ifdef CONFIG_KSU_SUSFS_ENABLE_LOG
 extern bool susfs_is_log_enabled __read_mostly;
-
+#endif
 #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
 extern void susfs_run_try_umount_for_current_mnt_ns(void);
 #endif // #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
@@ -214,7 +215,7 @@ static inline const struct cred *get_cred_rcu(const struct cred *cred)
 	struct cred *nonconst_cred = (struct cred *) cred;
 	if (!cred)
 		return NULL;
-#ifdef KSU_COMPAT_LONG_INC
+#ifdef KSU_COMPAT_ATOMIC_LONG
 	if (!atomic_long_inc_not_zero(&nonconst_cred->usage))
 #else
 	if (!atomic_inc_not_zero(&nonconst_cred->usage))
@@ -934,7 +935,7 @@ static void ksu_try_umount(const char *mnt, bool check_mnt, int flags)
 		return;
 	}
 
-#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
+#if defined(CONFIG_KSU_SUSFS_TRY_UMOUNT) && defined(CONFIG_KSU_SUSFS_ENABLE_LOG)
 	if (susfs_is_log_enabled) {
 		pr_info("susfs: umounting '%s' for uid: %d\n", mnt, uid);
 	}
@@ -1060,32 +1061,7 @@ out_ksu_try_umount:
 	return 0;
 }
 
-// Init functons
-#if 0
-static int handler_pre(struct kprobe *p, struct pt_regs *regs)
-{
-	struct pt_regs *real_regs = PT_REAL_REGS(regs);
-	int option = (int)PT_REGS_PARM1(real_regs);
-	unsigned long arg2 = (unsigned long)PT_REGS_PARM2(real_regs);
-	unsigned long arg3 = (unsigned long)PT_REGS_PARM3(real_regs);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 16, 0)
-	// PRCTL_SYMBOL is the arch-specificed one, which receive raw pt_regs from syscall
-	unsigned long arg4 = (unsigned long)PT_REGS_SYSCALL_PARM4(real_regs);
-#else
-	// PRCTL_SYMBOL is the common one, called by C convention in do_syscall_64
-	// https://elixir.bootlin.com/linux/v4.15.18/source/arch/x86/entry/common.c#L287
-	unsigned long arg4 = (unsigned long)PT_REGS_CCALL_PARM4(real_regs);
-#endif
-	unsigned long arg5 = (unsigned long)PT_REGS_PARM5(real_regs);
-
-	return ksu_handle_prctl(option, arg2, arg3, arg4, arg5);
-}
-
-static struct kprobe prctl_kp = {
-	.symbol_name = PRCTL_SYMBOL,
-	.pre_handler = handler_pre,
-};
-
+#ifdef MODULE
 static int renameat_handler_pre(struct kprobe *p, struct pt_regs *regs)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
@@ -1105,30 +1081,7 @@ static struct kprobe renameat_kp = {
 	.symbol_name = "vfs_rename",
 	.pre_handler = renameat_handler_pre,
 };
-
-__maybe_unused int ksu_kprobe_init(void)
-{
-	int rc = 0;
-	rc = register_kprobe(&prctl_kp);
-
-	if (rc) {
-		pr_info("prctl kprobe failed: %d.\n", rc);
-		return rc;
-	}
-
-	rc = register_kprobe(&renameat_kp);
-	pr_info("renameat kp: %d\n", rc);
-
-	return rc;
-}
-
-__maybe_unused int ksu_kprobe_exit(void)
-{
-	unregister_kprobe(&prctl_kp);
-	unregister_kprobe(&renameat_kp);
-	return 0;
-}
-#endif /* DEAD_CODE */
+#endif /* MODULE */
 
 static int ksu_task_prctl(int option, unsigned long arg2, unsigned long arg3,
 			  unsigned long arg4, unsigned long arg5)
@@ -1364,11 +1317,4 @@ void __init ksu_core_init(void)
 
 void ksu_core_exit(void)
 {
-#if 0
-#ifdef CONFIG_KPROBES
-	pr_info("ksu_core_kprobe_exit\n");
-	// we dont use this now
-	// ksu_kprobe_exit();
-#endif
-#endif
 }
